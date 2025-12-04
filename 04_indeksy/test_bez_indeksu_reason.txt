@@ -1,0 +1,8 @@
+var popularReason = db.reasons.findOne({ name: "Investigation by Journal/Publisher" });
+var idSzukania = popularReason._id;
+print("Szukamy ID: " + idSzukania);
+
+
+db.articles.find({ "reason_ids": idSzukania })
+  .sort({ "Title": 1 }) // Sortowanie po polu tekstowym bez indeksu!
+  .explain("executionStats")

@@ -1,0 +1,1 @@
+db.articles.createIndex({ "reason_ids": 1, "Title": 1 })

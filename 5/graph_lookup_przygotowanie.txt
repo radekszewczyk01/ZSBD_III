@@ -1,0 +1,46 @@
+print("⏳ Budowanie grafu współpracy (Collaborations)...");
+
+var bulkOps = [];
+var counter = 0;
+
+// Pobieramy artykuły, które mają więcej niż 1 autora (bo tam jest współpraca)
+// Używamy pola tekstowego Author (dzielonego średnikami) bo jest najpewniejsze
+db.articles.find({ Author: /;/ }).forEach(doc => {
+    if (doc.Author) {
+        // Czyścimy i dzielimy autorów
+        var authors = doc.Author.split(';').map(a => a.trim()).filter(a => a.length > 0);
+        
+        // Generujemy pary "każdy z każdym"
+        // Jeśli jest 3 autorów [A, B, C], to mamy pary: A-B, A-C, B-A, B-C, C-A, C-B
+        for (var i = 0; i < authors.length; i++) {
+            for (var j = 0; j < authors.length; j++) {
+                if (i === j) continue; // Nie łączymy autora z samym sobą
+
+                bulkOps.push({
+                    insertOne: {
+                        document: {
+                            author: authors[i],
+                            collaborator: authors[j],
+                            article_id: doc._id // Dajemy ID artykułu jako dowód współpracy
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // Zapisujemy paczkami po 2000 (grafy rosną szybko!)
+    if (bulkOps.length >= 2000) {
+        db.collaborations.bulkWrite(bulkOps);
+        bulkOps = [];
+        counter++;
+        if (counter % 50 === 0) print("Przetworzono paczkę nr " + counter);
+    }
+});
+
+if (bulkOps.length > 0) db.collaborations.bulkWrite(bulkOps);
+
+print("✅ Graf zbudowany! Tworzę indeksy...");
+db.collaborations.createIndex({ author: 1 });
+db.collaborations.createIndex({ collaborator: 1 });
+print("🎉 Gotowe. Masz teraz sieć społecznościową naukowców.");

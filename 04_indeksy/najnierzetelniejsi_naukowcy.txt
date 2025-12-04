@@ -1,0 +1,64 @@
+db.articles.aggregate([
+  // 1. Rozbij string z autorami na pojedyncze osoby
+  {
+    $project: {
+      authors_list: { 
+        $map: {
+            input: { $split: ["$Author", ";"] },
+            as: "a",
+            in: { $trim: { input: "$$a" } }
+        }
+      },
+      reason_ids: 1
+    }
+  },
+  { $unwind: "$authors_list" },
+  { $match: { authors_list: { $ne: "" } } },
+
+  // 2. Dołącz dane o powodach (żeby pobrać ich 'severity')
+  {
+    $lookup: {
+      from: "reasons",
+      localField: "reason_ids",
+      foreignField: "_id",
+      as: "reason_details"
+    }
+  },
+
+  // 3. Oblicz sumę punktów dla DANEGO ARTYKUŁU
+  // (Artykuł może mieć 3 powody, np. Plagiat (5) + Error (0) = 5)
+  {
+    $addFields: {
+      article_severity_score: { $sum: "$reason_details.severity" }
+    }
+  },
+
+  // 4. Zgrupuj po Autorze
+  {
+    $group: {
+      _id: "$authors_list",
+      total_score: { $sum: "$article_severity_score" }, // Łączna waga przewinień
+      retraction_count: { $sum: 1 },                    // Ilość wycofanych prac
+      avg_severity: { $avg: "$article_severity_score" } // Średnia waga (czy to recydywista czy pechowiec)
+    }
+  },
+
+  // 5. Odrzuć drobnicę (żeby zobaczyć tylko poważnych graczy)
+  { $match: { total_score: { $gt: 10 } } },
+
+  // 6. Sortuj od "Najgroźniejszego"
+  { $sort: { total_score: -1 } },
+  
+  // 7. Pokaż Top 10
+  { $limit: 10 },
+
+  // 8. Ładne formatowanie
+  {
+    $project: {
+      Author: "$_id",
+      "Risk Score": "$total_score",
+      "Retractions": "$retraction_count",
+      "Avg Severity": { $round: ["$avg_severity", 1] }
+    }
+  }
+])

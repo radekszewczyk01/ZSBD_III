@@ -1,0 +1,57 @@
+import pymongo
+
+# KONFIGURACJA
+MONGO_URI = "mongodb://localhost:27017/"
+DB_NAME = "retractionWatchDB"
+COL_NAME = "articles"
+
+def find_first_orcid():
+    client = pymongo.MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    collection = db[COL_NAME]
+
+    print("🔍 Przeszukuję pobrane dane w poszukiwaniu ORCID...")
+
+    # Szukamy tylko w dokumentach, które mają pobrane dane zewnętrzne (crossref_data)
+    # To optymalizacja, żeby nie mieliło pustych rekordów
+    cursor = collection.find({ 
+        "crossref_data": { "$exists": True, "$ne": [] } 
+    })
+
+    found_orcid = False
+    i = 0
+    for doc in cursor:
+        i += 1
+        # Pobierz tablicę autorów z Crossref
+        authors_list = doc.get("crossref_data", [])
+        
+        for author in authors_list:
+            # Sprawdź, czy ten konkretny autor ma klucz 'ORCID'
+            if "ORCID" in author:
+                print("\n" + "="*40)
+                print("✅ SUKCES! ZNALEZIONO AUTORA Z ORCID")
+                print("="*40)
+                print(f"Tytuł artykułu: {doc.get('Title', 'Brak tytułu')}")
+                print(f"DOI artykułu:   {doc.get('OriginalPaperDOI', 'Brak DOI')}")
+                print("-" * 20)
+                print("PEŁNE DANE AUTORA Z API:")
+                print(author)
+                print("="*40)
+                
+                # Ustawiamy flagę i przerywamy wewnętrzną pętlę
+                found_orcid = True
+                break
+        
+        # Jeśli znaleziono, przerywamy też główną pętlę (szukamy tylko pierwszego)
+        if found_orcid:
+            break
+
+    if not found_orcid:
+        print(i)
+        print("\n❌ Przeszukano dostępne dane z Crossref, ale nie znaleziono żadnego pola 'ORCID'.")
+        print("Możliwe przyczyny:")
+        print("1. Skrypt pobierający dane jeszcze nie trafił na 'bogaty' artykuł.")
+        print("2. W pobranych artykułach wydawcy nie udostępnili ORCID.")
+
+if __name__ == "__main__":
+    find_first_orcid()

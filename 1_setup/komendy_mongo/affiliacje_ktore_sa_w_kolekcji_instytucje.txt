@@ -1,0 +1,53 @@
+db.authors_authenticated.aggregate([
+  // 1. Rozbijamy zewnętrzną tablicę afiliacji
+  { 
+    $unwind: "$affiliations" 
+  },
+  
+  // 2. Rozbijamy wewnętrzną tablicę
+  { 
+    $unwind: "$affiliations" 
+  },
+
+  // 3. Wyciągamy samą nazwę
+  {
+    $project: {
+      aff_name: "$affiliations.name"
+    }
+  },
+  {
+    $match: {
+      aff_name: { $exists: true, $ne: "" }
+    }
+  },
+
+  // 4. Grupujemy, żeby liczyć unikalne nazwy instytucji
+  {
+    $group: {
+      _id: "$aff_name"
+    }
+  },
+
+  // 5. Sprawdzamy (JOIN) z kolekcją institutions
+  {
+    $lookup: {
+      from: "institutions",
+      localField: "_id",
+      foreignField: "name",
+      as: "matched_in_db"
+    }
+  },
+
+  // 6. KLUCZOWA ZMIANA: Zostawiamy tylko te, gdzie tablica NIE jest pusta
+  // Czyli znaleziono dopasowanie w Twojej bazie
+  {
+    $match: {
+      "matched_in_db.0": { $exists: true }
+    }
+  },
+
+  // 7. Liczymy wynik
+  {
+    $count: "found_affiliations_count"
+  }
+])

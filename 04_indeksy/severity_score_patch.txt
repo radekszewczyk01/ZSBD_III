@@ -1,0 +1,19 @@
+// 1. "No Further Action" to brak winy -> 0 pkt
+db.reasons.updateOne(
+    { name: "No Further Action" },
+    { $set: { severity: 0 } }
+);
+
+// 2. "Unreliable Image" to problem z danymi -> 3 pkt
+db.reasons.updateOne(
+    { name: "Unreliable Image" },
+    { $set: { severity: 3 } }
+);
+
+// 3. Eufemizmy traktujemy surowo, bo ukrywają prawdziwe przewinienia -> 5 pkt
+db.reasons.updateMany(
+    { name: { $in: ["Euphemisms for Duplication", "Euphemisms for Plagiarism"] } },
+    { $set: { severity: 5 } }
+);
+
+print("✅ Naprawiono brakujące 4 powody. Baza jest kompletna.");

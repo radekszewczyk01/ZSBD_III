@@ -1,0 +1,32 @@
+db.createView(
+  "view_blacklisted_authors", // Nazwa widoku
+  "articles",                 // Kolekcja źródłowa
+  [
+    // 1. Rozbijamy autorów
+    { $project: { 
+        authors_list: { $split: ["$Author", ";"] }, 
+        calculated_severity: 1 
+    }},
+    { $unwind: "$authors_list" },
+    { $project: { 
+        author_name: { $trim: { input: "$authors_list" } },
+        severity: "$calculated_severity"
+    }},
+    { $match: { author_name: { $ne: "" } } },
+
+    // 2. Grupujemy po autorze
+    { $group: {
+        _id: "$author_name",
+        total_retractions: { $sum: 1 },
+        avg_risk_score: { $avg: "$severity" } // Średnia "szkodliwość"
+    }},
+
+    // 3. Filtr biznesowy: Tylko "High Risk" (np. średnia > 7)
+    { $match: { avg_risk_score: { $gt: 7 } } },
+
+    // 4. Sortowanie
+    { $sort: { avg_risk_score: -1 } }
+  ]
+)
+
+print("✅ Utworzono widok 'view_blacklisted_authors'.");

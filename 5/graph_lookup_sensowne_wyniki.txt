@@ -1,0 +1,57 @@
+var targetAuthor = "Joachim Boldt";
+
+db.collaborations.aggregate([
+  // 1. Start: Znajdź punkt wejścia w grafie
+  { $match: { author: targetAuthor } },
+  
+  // Zabezpieczenie: Grupujemy start, żeby graphLookup nie startował wielokrotnie
+  { $group: { _id: "$author" } },
+
+  // 2. Przeszukiwanie Grafu
+  {
+    $graphLookup: {
+      from: "collaborations",
+      startWith: "$_id",
+      connectFromField: "collaborator",
+      connectToField: "author",
+      maxDepth: 1, // 0 = bezpośredni, 1 = znajomi znajomych
+      depthField: "level",
+      as: "network"
+    }
+  },
+
+  // 3. Rozbijamy tablicę wyników
+  { $unwind: "$network" },
+
+  // 4. KLUCZOWE: Grupujemy po nazwisku współpracownika
+  {
+    $group: {
+      _id: "$network.collaborator",       // Imię i nazwisko
+      min_distance: { $min: "$network.level" }, // Najkrótszy dystans (0 jest ważniejsze niż 1)
+      collaboration_strength: { $sum: 1 } // Ile razy wystąpił w sieci
+    }
+  },
+
+  // 5. Filtry czyszczące
+  { 
+    $match: { 
+      _id: { $ne: targetAuthor }, // Usuń samego Boldta z listy
+      _id: { $ne: null }          // Usuń ewentualne nulle
+    } 
+  },
+
+  // 6. Sortowanie: Najpierw bezpośredni (0), a wśród nich ci najczęstsi
+  { $sort: { min_distance: 1, collaboration_strength: -1 } },
+
+  // 7. Pokaż Top 20
+  { $limit: 20 },
+
+  // 8. Ładna tabelka
+  {
+    $project: {
+      "Wspólnik": "$_id",
+      "Poziom (0=Bezpośredni)": "$min_distance",
+      "Siła Współpracy (Liczba powiązań)": "$collaboration_strength"
+    }
+  }
+])
